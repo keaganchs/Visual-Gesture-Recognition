@@ -1,2 +1,9 @@
 /venv
 /mediapipe
+
+/gesture_recognition/api/__pycache__
+/gesture_recognition/database/__pycache__
+/gesture_recognition/gesture_annotation/__pycache__
+
+/MiscHandTracking/__pycache__
+/gesture_annotation/__pycache__

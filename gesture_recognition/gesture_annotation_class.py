@@ -10,22 +10,29 @@ import mediapipe.python.solutions.hands as mp_hands
 from mediapipe.python.solutions.drawing_utils import draw_landmarks
 from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks_style, get_default_hand_connections_style
 
-from helper_functions import time_this
-# from ..database.db import GESTURE_LIST
-from gesture_annotation import VIDEO_LENGTH
+# from gesture_annotation.helper_functions import time_this
+from api.gestures import create_gesture, HandHistoryEncoder
+
+from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal
+from database.pydantic_models import GestureCreate
+
+import json
+
 
 class GestureAnnotation:  
-    def __init__(self, debug = False):     
+    def __init__(self, gesture_list: List, video_length: int, debug = False):   
         self.debug = debug
 
-        # Will store the video source, for a webcam: cv2.VideoCapture(0)   
+        # Will store the video source, for an integrated camera this is cv2.VideoCapture(0)   
         self.cap = None
         # Will store the current frame
         self.frame = npt.NDArray
+        # Store gestures in a dict:
+        self.gesture_dict = {}
 
         # Store the last pressed key
         self.is_showing_key_press = False
-        self.last_key_press = None
+        self.last_useful_key_press = None
         self.key_press_frame_idx = 0
 
         # Store the last recorded gesture 
@@ -33,13 +40,12 @@ class GestureAnnotation:
         self.saved_gesture = npt.NDArray
         self.record_gesture_frame_idx = 0
 
-        # Deque for storing the last VIDEO_LENGTH hand coordinates frames
-        self.last_hand_positions = deque(maxlen=VIDEO_LENGTH) 
-        for _ in range(VIDEO_LENGTH):
+        # Deque for storing the last video_length hand coordinates frames
+        self.last_hand_positions = deque(maxlen=video_length) 
+        for _ in range(video_length):
             self.last_hand_positions.append(None)
 
-
-
+        self.__assign_keys_to_gestures(gesture_list=gesture_list)
 
     def __del__(self):
         self.stop()
@@ -51,6 +57,15 @@ class GestureAnnotation:
             self.cap = cv2.VideoCapture(0)
         except:
             raise(RuntimeError("Error connecting to webcam."))
+
+
+    def __assign_keys_to_gestures(self, gesture_list) -> None:
+        # Assign gestures to the keys 1-9 then a-z.
+        for idx, gesture in enumerate(gesture_list):
+            if idx < 9:
+                self.gesture_dict[str(idx+1)] = gesture
+            else:
+                self.gesture_dict[chr(idx-8+ord('a'))] = gesture
 
 
     def __draw_hand_landmarks(self, image: np.ndarray, results) -> None:
@@ -82,6 +97,44 @@ class GestureAnnotation:
                 cv2.line(self.frame, points[i], points[i-1], (0, 0, 255), 3)
 
 
+    def __draw_gesture_list(self) -> None:
+        for idx, key in enumerate(self.gesture_dict):
+            cv2.putText(
+                img=self.frame, 
+                text=f"{key}: {self.gesture_dict[key]}", 
+                org=(20, 20 + (20 * idx)), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=0.5, color=(0, 255, 0), 
+                thickness=1, 
+                lineType=cv2.LINE_AA, 
+                bottomLeftOrigin=False)
+
+
+    def __draw_red_recording_box(self) -> None:
+        image_rows, image_cols, _ = self.frame.shape
+        cv2.rectangle(self.frame, (0, 0), (image_cols-1, image_rows-1), color=(0,0,255), thickness=2)
+
+    def __draw_key_press(self) -> None:
+        # Draw key press on the image for VIDEO_LENGTH frames.
+        if self.last_useful_key_press is not None:
+            # Increase counter for frames since the 
+            self.key_press_frame_idx += 1
+
+            if (self.key_press_frame_idx <= VIDEO_LENGTH):
+                if (self.is_showing_key_press):
+                    cv2.putText(
+                        img=self.frame, 
+                        text=f"Key press: { chr(self.last_useful_key_press) }", 
+                        org=(20, 450), 
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                        fontScale=0.5, color=(0, 255, 0), 
+                        thickness=1, 
+                        lineType=cv2.LINE_AA, 
+                        bottomLeftOrigin=False)
+            else: # key_press_frame_idx is greater than the video length. Stop showing the pressed key.
+                self.is_showing_key_press = False
+            
+    
     def __handle_key_press(self, key_press: int) -> None:
         # Do nothing on no key press
         if key_press == -1:
@@ -91,41 +144,53 @@ class GestureAnnotation:
             self.stop()
         # For any other key press:
         else:
-            # If a gesture being recorded, ignore the key press.
+            # If a gesture being recorded, ignore the key press. 
+            # Note that last_key_press will hold the same value until recording has finished.
+            if self.is_recording:
+                return
+            # Store this key press
+            self.is_showing_key_press = True
+            self.last_useful_key_press = key_press
+            self.key_press_frame_idx = 0
+
+        self.__draw_key_press()
+
+
+    def __handle_gesture_recording(self) -> None:
+            # Check if recording should be started
             if not self.is_recording:
-                self.is_showing_key_press = True
-                self.last_key_press = key_press
-                self.key_press_frame_idx = 0
-
-        # Draw key press on the image for VIDEO_LENGTH frames.
-        if self.last_key_press is not None:
-            # Increase counter for frames since the 
-            self.key_press_frame_idx += 1
-
-            if (self.key_press_frame_idx <= VIDEO_LENGTH):
-                if (self.is_showing_key_press):
-                    cv2.putText(
-                        img=self.frame, 
-                        text=f"Key press: { chr(self.last_key_press) }", 
-                        org=(50, 450), 
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                        fontScale=1, color=(255, 0, 0), 
-                        thickness=2, 
-                        lineType=cv2.LINE_AA, 
-                        bottomLeftOrigin=False)
-            else:
-                # Clear last key press to avoid overflowing the key_press_frame_idx counter.
-                self.last_key_press = None
-                self.is_showing_key_press = False
+                if (self.last_useful_key_press is not None) and (chr(self.last_useful_key_press) in self.gesture_dict.keys()):
+                    self.is_recording = True
+                    self.record_gesture_frame_idx = 0
+                else:
+                    # Not recording, key press does not correspond to a gesture annotation: return.
+                    return
+            
+            # Currently recording. Incriment frame counter
+            self.record_gesture_frame_idx += 1
+            
+            # Draw red border around image when recording
+            self.__draw_red_recording_box()
 
 
-    # def __record_gesture(self) -> None:
-    #         for gesture in GESTURE_LIST:
-
-
-    #         else:
-    #             self.is_recording = False
+            if self.record_gesture_frame_idx >= VIDEO_LENGTH:
+                # Save the last hand positions to the database:
+                # print("Recorded data:\n", json.dumps(self.last_hand_positions, indent=2, cls=HandHistoryEncoder))
                 
+                # create_gesture(
+                #     db=SessionLocal, 
+                #     gesture=GestureCreate(
+                #         sequence_length=VIDEO_LENGTH,
+                #         classification=self.gesture_dict[chr(self.last_useful_key_press)],
+                #         hand_coordinates=json.dumps(self.last_hand_positions, cls=HandHistoryEncoder)
+                #     )
+                # )
+                # Reset recording flag
+                self.is_recording = False
+                # Clear last key press to avoid overflowing the key_press_frame_idx counter.
+                self.last_useful_key_press = None 
+
+            
 
 
     def start(self) -> None:
@@ -159,8 +224,13 @@ class GestureAnnotation:
                 # Flip the image horizontally for a selfie-view display:
                 self.frame = cv2.flip(self.frame, 1)
 
-                key_press = cv2.waitKey(5)
+                # Draw acceptable gestures on the flipped image 
+                self.__draw_gesture_list()
+
+                # Get keyboard input
+                key_press = cv2.waitKey(10)
                 self.__handle_key_press(key_press)
+                self.__handle_gesture_recording()
 
                 cv2.imshow('Gesture Annotation', self.frame)
 
@@ -174,5 +244,5 @@ class GestureAnnotation:
         
 
 if __name__ == "__main__":
-    ga = GestureAnnotation()
+    ga = GestureAnnotation(gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
     ga.start()

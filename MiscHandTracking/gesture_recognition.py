@@ -12,7 +12,7 @@ cap = cv2.VideoCapture(0)
 cv2.namedWindow('Hand Gestures')
 
 with mp_hands.Hands(
-    max_num_hands=1,  # Set to 1 for single hand tracking
+    max_num_hands=4,  # Set to 1 for single hand tracking
     min_detection_confidence=0.8,
     min_tracking_confidence=0.5) as hands:
 
