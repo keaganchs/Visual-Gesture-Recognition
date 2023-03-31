@@ -2,7 +2,7 @@ import time
 import numpy as np
 import numpy.typing as npt
 from collections import deque
-from typing import Union, Tuple, List, NamedTuple, Literal
+from typing import Union, Tuple, List, NamedTuple, Literal, Any
 
 import cv2
 import mediapipe as mp
@@ -10,11 +10,11 @@ import mediapipe.python.solutions.hands as mp_hands
 from mediapipe.python.solutions.drawing_utils import draw_landmarks
 from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks_style, get_default_hand_connections_style
 
-# from gesture_annotation.helper_functions import time_this
 from api.gestures import create_gesture, HandHistoryEncoder
 
-from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal
-from database.pydantic_models import GestureCreate
+from sqlalchemy.orm import Session, object_session
+from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
+from database import db_models, pydantic_models
 
 import json
 
@@ -22,10 +22,11 @@ import json
 class GestureAnnotation:  
     def __init__(self, gesture_list: List, video_length: int, debug = False):   
         self.debug = debug
+        # self.db = db
 
-        # Will store the video source, for an integrated camera this is cv2.VideoCapture(0)   
+        # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
-        # Will store the current frame
+        # Will store the current frame.
         self.frame = npt.NDArray
         # Store gestures in a dict:
         self.gesture_dict = {}
@@ -35,20 +36,33 @@ class GestureAnnotation:
         self.last_useful_key_press = None
         self.key_press_frame_idx = 0
 
-        # Store the last recorded gesture 
+        # Store the last recorded gesture.
         self.is_recording = False
         self.saved_gesture = npt.NDArray
         self.record_gesture_frame_idx = 0
 
-        # Deque for storing the last video_length hand coordinates frames
+        # Deque for storing the last video_length hand coordinates frames.
         self.last_hand_positions = deque(maxlen=video_length) 
         for _ in range(video_length):
             self.last_hand_positions.append(None)
-
+        
         self.__assign_keys_to_gestures(gesture_list=gesture_list)
+        
+        # Set up database.
+        db_models.Base.metadata.create_all(bind=engine)
+
 
     def __del__(self):
         self.stop()
+
+
+    def __get_db(self):
+        db = SessionLocal()
+        # db = object_session(self)
+        try:
+            yield db
+        finally:
+            db.close()
 
 
     def __start_webcam(self):
@@ -80,7 +94,7 @@ class GestureAnnotation:
         points = []
         image_rows, image_cols, _ = self.frame.shape
 
-        # Get index finger coordinates
+        # Get index finger coordinates.
         for result in self.last_hand_positions:
             if result and result.multi_hand_landmarks:
                 for hand_landmarks in result.multi_hand_landmarks:
@@ -114,10 +128,11 @@ class GestureAnnotation:
         image_rows, image_cols, _ = self.frame.shape
         cv2.rectangle(self.frame, (0, 0), (image_cols-1, image_rows-1), color=(0,0,255), thickness=2)
 
+
     def __draw_key_press(self) -> None:
         # Draw key press on the image for VIDEO_LENGTH frames.
         if self.last_useful_key_press is not None:
-            # Increase counter for frames since the 
+            # Count frames since the last key press.
             self.key_press_frame_idx += 1
 
             if (self.key_press_frame_idx <= VIDEO_LENGTH):
@@ -172,43 +187,55 @@ class GestureAnnotation:
             # Draw red border around image when recording
             self.__draw_red_recording_box()
 
-
             if self.record_gesture_frame_idx >= VIDEO_LENGTH:
                 # Save the last hand positions to the database:
                 # print("Recorded data:\n", json.dumps(self.last_hand_positions, indent=2, cls=HandHistoryEncoder))
                 
-                # create_gesture(
-                #     db=SessionLocal, 
-                #     gesture=GestureCreate(
-                #         sequence_length=VIDEO_LENGTH,
-                #         classification=self.gesture_dict[chr(self.last_useful_key_press)],
-                #         hand_coordinates=json.dumps(self.last_hand_positions, cls=HandHistoryEncoder)
-                #     )
-                # )
+                # Write JSON of last hand coordinates to file for debugging. 
+                if self.debug:
+                    with open('coordinates.txt', 'w') as f:
+                        f.write(json.dumps(self.last_hand_positions, indent=2, cls=HandHistoryEncoder))
+
+                # Create new gesture entry in the database.
+                print(self.__get_db()) 
+                create_gesture(
+                    db=self.__get_db().__next__(),
+                    gesture=pydantic_models.GestureCreate(
+                        sequence_length=VIDEO_LENGTH,
+                        classification=self.gesture_dict[chr(self.last_useful_key_press)],
+                        hand_coordinates=json.dumps(self.last_hand_positions, cls=HandHistoryEncoder)
+                    )
+                )
+                try:
+                    pass
+                except Exception as err:
+                    print("Error creating gesture.", err)
+
                 # Reset recording flag
                 self.is_recording = False
                 # Clear last key press to avoid overflowing the key_press_frame_idx counter.
                 self.last_useful_key_press = None 
 
-            
-
-
+    
     def start(self) -> None:
         self.__start_webcam()
 
         with mp_hands.Hands(model_complexity=0, max_num_hands=1, min_detection_confidence=0.7, min_tracking_confidence=0.6) as hands:
             while self.cap.isOpened():
-                # Read frame from video feed
+                # Read frame from video feed.
                 success, self.frame = self.cap.read()
                 if not success:
                     print("Ignoring empty camera frame.")
                     continue
                 
+                # Flip the image horizontally for a selfie-view display:
+                self.frame = cv2.flip(self.frame, 1)
+
                 # To improve performance, optionally mark the image as not writeable to pass by reference.
                 self.frame.flags.writeable = False
                 self.frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
                 
-                # Get hand landmarks from Mediapipe
+                # Get hand landmarks from Mediapipe.
                 current_hand_landmarks = hands.process(self.frame)
 
                 # Record the last hand coordinates for active gesture processing.
@@ -220,11 +247,8 @@ class GestureAnnotation:
                 self.frame = cv2.cvtColor(self.frame, cv2.COLOR_RGB2BGR)
                 self.__draw_hand_landmarks(self.frame, current_hand_landmarks)
                 self.__draw_index_fingertip_landmarks_history()
-                
-                # Flip the image horizontally for a selfie-view display:
-                self.frame = cv2.flip(self.frame, 1)
 
-                # Draw acceptable gestures on the flipped image 
+                # Draw available gestures on the flipped image.
                 self.__draw_gesture_list()
 
                 # Get keyboard input
@@ -234,15 +258,20 @@ class GestureAnnotation:
 
                 cv2.imshow('Gesture Annotation', self.frame)
 
+
     def stop(self) -> int:
         try: 
             self.cap.release()
             return 0
         except:
-            print("Error destructing. I'm sure glad this was written in a language with a garbage collector.")
+            print("Error destructing.")
             return 1
-        
+
 
 if __name__ == "__main__":
+    # Set up database.
+    db_models.Base.metadata.create_all(bind=engine)
+
     ga = GestureAnnotation(gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
     ga.start()
+

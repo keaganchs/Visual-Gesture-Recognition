@@ -7,7 +7,6 @@ from json import JSONEncoder
 from collections import deque
 
 class HandHistoryEncoder(JSONEncoder):
-
     def default(self, obj):
         # JSON format of hand landmarks:
         #   {
