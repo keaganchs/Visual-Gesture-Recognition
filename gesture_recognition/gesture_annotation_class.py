@@ -49,7 +49,7 @@ class GestureAnnotation:
         self.__assign_keys_to_gestures(gesture_list=gesture_list)
         
         # Set up database.
-        db_models.Base.metadata.create_all(bind=engine)
+        # db_models.Base.metadata.create_all(bind=engine)
 
 
     def __del__(self):
@@ -58,7 +58,6 @@ class GestureAnnotation:
 
     def __get_db(self):
         db = SessionLocal()
-        # db = object_session(self)
         try:
             yield db
         finally:
@@ -197,7 +196,6 @@ class GestureAnnotation:
                         f.write(json.dumps(self.last_hand_positions, indent=2, cls=HandHistoryEncoder))
 
                 # Create new gesture entry in the database.
-                print(self.__get_db()) 
                 create_gesture(
                     db=self.__get_db().__next__(),
                     gesture=pydantic_models.GestureCreate(
@@ -209,7 +207,7 @@ class GestureAnnotation:
                 try:
                     pass
                 except Exception as err:
-                    print("Error creating gesture.", err)
+                    print("Error creating gesture entry in database.", err)
 
                 # Reset recording flag
                 self.is_recording = False
