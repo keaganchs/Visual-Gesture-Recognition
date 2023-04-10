@@ -8,7 +8,7 @@ from collections import deque
 
 class HandHistoryEncoder(JSONEncoder):
     def default(self, obj):
-        # JSON format of hand landmarks:
+        ################## JSON format of hand landmarks: ##################
         #   {
         #       "frames":
         #       [
@@ -47,28 +47,39 @@ class HandHistoryEncoder(JSONEncoder):
             list_obj = obj
 
         json_frames_list = {"frames":[]}
+        # Loop through each frame of video
         for i, result in enumerate(list_obj):
-            temp_landmark_array = []
-            for j, landmark in enumerate(result.multi_hand_landmarks[0].landmark):
-                if landmark is not None:
-                    temp_landmark_array.append({
-                        "landmark_idx": j,
-                        "x": landmark.x,
-                        "y": landmark.y,
-                        "z": landmark.z
-                    })
-                else:
-                    temp_landmark_array.append({
-                        "landmark_idx": j,
-                        "x": None,
-                        "y": None,
-                        "z": None
-                    })
-            json_frames_list["frames"].append({
-                "frame_idx": i,
-                "handedness": result.multi_handedness[0].classification[0].label,
-                "landmarks": temp_landmark_array
-            })
+            # If a hand was detected in the frame
+            if (result is not None) and (result.multi_hand_landmarks is not None):
+                temp_landmark_array = []
+                # Loop through the 21 hand landmarks in each frame.
+                for j, landmark in enumerate(result.multi_hand_landmarks[0].landmark):
+                    if landmark is not None:
+                        temp_landmark_array.append({
+                            "landmark_idx": j,
+                            "x": landmark.x,
+                            "y": landmark.y,
+                            "z": landmark.z
+                        })
+                    else:
+                        temp_landmark_array.append({
+                            "landmark_idx": j,
+                            "x": None,
+                            "y": None,
+                            "z": None
+                        })
+                json_frames_list["frames"].append({
+                    "frame_idx": i,
+                    "handedness": result.multi_handedness[0].classification[0].label,
+                    "landmarks": temp_landmark_array
+                })
+            # If the frame is empty:
+            else: 
+                json_frames_list["frames"].append({
+                    "frame_idx": i,
+                    "handedness": None,
+                    "landmarks": None
+                })
 
         return json_frames_list
 
