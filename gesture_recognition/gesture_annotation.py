@@ -76,9 +76,9 @@ class GestureAnnotation:
         # Assign gestures to the keys 1-9 then a-z.
         for idx, gesture in enumerate(gesture_list):
             if idx < 9:
-                self.gesture_dict[str(idx+1)] = gesture
+                self.gesture_dict[str(idx + 1)] = gesture
             else:
-                self.gesture_dict[chr(idx-8+ord('a'))] = gesture
+                self.gesture_dict[chr((idx - 8) + ord('a'))] = gesture
 
 
     def __draw_hand_landmarks(self, image: np.ndarray, results) -> None:
