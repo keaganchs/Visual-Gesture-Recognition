@@ -83,17 +83,21 @@ class HandHistoryEncoder(JSONEncoder):
 
         return json_frames_list
 
+
 # Get one gesture by ID
 def get_gesture_by_id(db: Session, gesture_id: int) -> pydantic_models.Gesture:
     return db.query(db_models.Gesture).filter(db_models.Gesture.id == gesture_id).first()
+
 
 # Get all gestures of one classification
 def get_gestures_by_classification(db: Session, classification: str, skip: int = 0, limit: int = 100) -> List[pydantic_models.Gesture]:
     return db.query(db_models.Gesture).filter(db_models.Gesture.classification == classification).offset(skip).limit(limit).all()
 
+
 # Get all gestures
 def get_gestures(db: Session, skip: int = 0, limit: int = 100) -> List[pydantic_models.Gesture]:
     return db.query(db_models.Gesture).offset(skip).limit(limit).all()
+
 
 # Create new Gesture entry
 def create_gesture(db: Session, gesture: pydantic_models.GestureCreate):
