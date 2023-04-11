@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from typing import Literal
 
 VIDEO_LENGTH = 30 # Number of frames
 GESTURE_LIST = ["SWIPE_LEFT", "SWIPE_RIGHT"]
