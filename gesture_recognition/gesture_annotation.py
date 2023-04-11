@@ -1,18 +1,15 @@
-import time
 import numpy as np
 import numpy.typing as npt
 from collections import deque
-from typing import Union, Tuple, List, NamedTuple, Literal, Any
+from typing import List
 
 import cv2
-import mediapipe as mp
 import mediapipe.python.solutions.hands as mp_hands
 from mediapipe.python.solutions.drawing_utils import draw_landmarks
 from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks_style, get_default_hand_connections_style
 
 from api.gestures import create_gesture, HandHistoryEncoder
 
-from sqlalchemy.orm import Session, object_session
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
 
