@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Json
+import json
 
 # Gestures
 ########################################################
@@ -9,7 +10,9 @@ class GestureBase(BaseModel):
     hand_coordinates:   Json
 
     class Config:
-        arbitrary_types_allowed = True
+        # arbitrary_types_allowed = True
+        json_loads = json.loads
+        json_dumps = json.dumps
     
 class GestureCreate(GestureBase):
     pass

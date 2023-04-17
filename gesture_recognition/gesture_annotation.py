@@ -19,7 +19,6 @@ import json
 class GestureAnnotation:  
     def __init__(self, gesture_list: List, video_length: int, debug = False):   
         self.debug = debug
-        # self.db = db
 
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
@@ -46,8 +45,10 @@ class GestureAnnotation:
         self.__assign_keys_to_gestures(gesture_list=gesture_list)
         
         # Set up database.
-        # db_models.Base.metadata.create_all(bind=engine)
-
+        try:
+            db_models.Base.metadata.create_all(bind=engine)
+        except:
+            raise RuntimeError("Error creating a database connection.")
 
     def __del__(self):
         self.stop()
@@ -55,7 +56,7 @@ class GestureAnnotation:
 
     def __get_db(self):
         db = SessionLocal()
-        try:
+        try: 
             yield db
         finally:
             db.close()
@@ -238,15 +239,19 @@ class GestureAnnotation:
                 self.last_hand_positions.append(current_hand_landmarks)
 
                 # Draw hand annotations on the image.
-                self.frame.flags.writeable = True
                 self.frame = cv2.cvtColor(self.frame, cv2.COLOR_RGB2BGR)
+
+                # Mark image as writable again to draw on the frame.
+                self.frame.flags.writeable = True
+
+                # Draw hand landmarks and index fingertip history.
                 self.__draw_hand_landmarks(self.frame, current_hand_landmarks)
                 self.__draw_index_fingertip_landmarks_history()
 
                 # Draw available gestures on the flipped image.
                 self.__draw_gesture_list()
 
-                # Get keyboard input
+                # Get keyboard input.
                 key_press = cv2.waitKey(10)
                 self.__handle_key_press(key_press)
                 self.__handle_gesture_recording()
@@ -264,9 +269,6 @@ class GestureAnnotation:
 
 
 if __name__ == "__main__":
-    # Set up database.
-    db_models.Base.metadata.create_all(bind=engine)
-
     ga = GestureAnnotation(gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
     ga.start()
 
