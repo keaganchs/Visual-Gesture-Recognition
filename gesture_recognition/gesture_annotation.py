@@ -62,7 +62,7 @@ class GestureAnnotation:
             db.close()
 
 
-    def __start_webcam(self):
+    def __start_webcam(self) -> None:
         # For webcam input:
         try:
             self.cap = cv2.VideoCapture(0)
