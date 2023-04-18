@@ -8,32 +8,47 @@ import mediapipe.python.solutions.hands as mp_hands
 from mediapipe.python.solutions.drawing_utils import draw_landmarks
 from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks_style, get_default_hand_connections_style
 
-from api.gestures import create_gesture, HandHistoryEncoder
+from api.gestures import HandHistoryEncoder, convert_dict_to_array
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
 
 import json
 
+import tensorflow as tf
+# Use this import method for VS Code IntelliSense
+keras = tf.keras
+
 
 class GestureRecognition:  
-    def __init__(self, gesture_list: List, video_length: int, debug = False):   
+    def __init__(self, model_path: str, gesture_list: List, video_length: int, debug = False):   
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
         # Will store the current frame.
         self.frame = npt.NDArray
-        # Store gestures in a dict:
-        self.gesture_dict = {}
 
         # Deque for storing the last video_length hand coordinates frames.
         self.last_hand_positions = deque(maxlen=video_length) 
         for _ in range(video_length):
             self.last_hand_positions.append(None)
 
+        # Store the machine learning model.
+        self.model = None
+        # Get the model from the given path.
+        try:
+            self.load_model(model_path)
+        except:
+            raise RuntimeError("Error fetching model. Double-check the path, or if no model exists, run the file gesture_recognition/train_neural_network.py.")
+
+        # Store gesture list to draw available gestures on the screen.
+        self.gesture_list = gesture_list
+
         # Bool to stop multiple gestures from being detected at once.
         self.is_gesture_detected = False
+
         # Store a detected gesture.
         self.detected_gesture = None
+        
         # Count frames since the gesture was detected. 
         self.detected_gesture_frame_idx = None
         
@@ -42,7 +57,7 @@ class GestureRecognition:
         self.stop()
 
 
-    def __start_webcam(self):
+    def __start_webcam(self) -> None:
         # For webcam input:
         try:
             self.cap = cv2.VideoCapture(0)
@@ -56,34 +71,11 @@ class GestureRecognition:
                 draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS, get_default_hand_landmarks_style(), get_default_hand_connections_style())
 
 
-    def __draw_index_fingertip_landmarks_history(self) -> None:
-        assert self.frame.flags.writeable
-        
-        points = []
-        image_rows, image_cols, _ = self.frame.shape
-
-        # Get index finger coordinates.
-        for result in self.last_hand_positions:
-            if result and result.multi_hand_landmarks:
-                for hand_landmarks in result.multi_hand_landmarks:
-                    points.append((
-                        # Pixel conversion from mediapipe.solutions.drawing_utils._normalized_to_pixel_coordinates():
-                        int(min(np.floor(hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x * image_cols), image_cols - 1)),
-                        int(min(np.floor(hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_rows), image_rows - 1))
-                    ))
-            else:
-                points.append(None)
-
-        for i in range(1, len(points)):
-            if points[i] and points[i-1]:
-                cv2.line(self.frame, points[i], points[i-1], (0, 0, 255), 3)
-
-
     def __draw_gesture_list(self) -> None:
-        for idx, key in enumerate(self.gesture_dict):
+        for idx, gesture in enumerate(self.gesture_list):
             cv2.putText(
                 img=self.frame, 
-                text=f"{key}: {self.gesture_dict[key]}", 
+                text=f"{gesture}", 
                 org=(20, 20 + (20 * idx)), 
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                 fontScale=0.5, color=(0, 255, 0), 
@@ -93,7 +85,17 @@ class GestureRecognition:
          
     
     def __draw_detected_gesture(self) -> None:
-        pass
+        if self.detected_gesture is not None:
+            cv2.putText(
+                img=self.frame, 
+                text=f"{self.detected_gesture}", 
+                org=(200, 450), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=0.5, color=(0, 255, 0), 
+                thickness=1, 
+                lineType=cv2.LINE_AA, 
+                bottomLeftOrigin=False)
+
 
     def __handle_key_press(self, key_press: int) -> None:
         # Do nothing on no key press
@@ -108,14 +110,37 @@ class GestureRecognition:
             if self.is_gesture_detected:
                 return
             # Store this key press
-            self.is_showing_key_press = True
             self.last_useful_key_press = key_press
-            self.key_press_frame_idx = 0
 
 
-    def __get_trained_model(self) -> None:
-        # Get a trained model, if one exists.
-        pass
+    def __preprocess_last_recorded_frames(self) -> npt.ArrayLike:
+        json_hand_positions=json.dumps(self.last_hand_positions, cls=HandHistoryEncoder)
+        return convert_dict_to_array(json_hand_positions)
+
+    def __check_for_gesture(self) -> (str | None):
+        if self.model is not None:
+            # Only detect one gesture at a time
+            input = self.__preprocess_last_recorded_frames()
+            return self.model(input)
+        
+
+    def load_model(self, model_path: str) -> None:
+        try:
+            new_model = keras.models.load_model(model_path, compile=False)
+        except: 
+            # Raise a warning if model can not be found.
+            raise RuntimeWarning("New model could not be loaded.")
+        
+        try:
+            new_model.compile(
+                optimizer="adam",
+                loss="categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+        except:
+            raise RuntimeWarning("Issue compiling model. No changes to the current model have been made.")
+        
+        self.model = new_model
 
     
     def start(self) -> None:
@@ -151,10 +176,14 @@ class GestureRecognition:
 
                 # Draw hand landmarks and index fingertip history.
                 self.__draw_hand_landmarks(self.frame, current_hand_landmarks)
-                self.__draw_index_fingertip_landmarks_history()
 
                 # Draw available gestures on the flipped image.
                 self.__draw_gesture_list()
+                self.__draw_detected_gesture()
+
+                if not self.is_gesture_detected:
+                    output = self.__check_for_gesture()
+                    print("Output of model: ", output)
 
                 # Get keyboard input.
                 key_press = cv2.waitKey(10)
@@ -173,6 +202,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    ga = GestureRecognition(gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
+    ga = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
     ga.start()
 
