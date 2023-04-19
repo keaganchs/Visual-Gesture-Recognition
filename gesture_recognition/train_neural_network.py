@@ -16,7 +16,15 @@ from api.gestures import get_all_coordinates_as_array, get_classifications
 from sklearn.model_selection import train_test_split
 
 class TrainNeuralNetwork:
-    def __init__(self):
+    def __init__(self, model_path = None):
+        # Store a trained model.
+        self.model = None
+
+        # Load model if given.
+        if model_path is not None:
+            self.load_model(model_path=model_path)
+        
+        # Set up tuner for hyperparameter optimization.
         self.tuner = keras_tuner.RandomSearch(
             hypermodel=self.build_model,
             objective="val_accuracy",
@@ -26,9 +34,10 @@ class TrainNeuralNetwork:
             directory="keras",
             project_name="visual_gesture_recognition",
         )
+
         # Print info about the seach space.
         self.tuner.search_space_summary()
-        print("##################################################################################################")
+        print("\n##################################################################################################\n")
 
         # Set up database.
         try:
@@ -82,18 +91,35 @@ class TrainNeuralNetwork:
         return model
 
 
-    def load_model(self, model_name: str) -> None:
-        model = keras.models.load_model("best_model.h5", compile=False)
-        model.compile(
-            optimizer="adam",
-            loss="categorical_crossentropy",
-            metrics=["accuracy"],
-        )
+    def load_model(self, model_path: str) -> None:
+        # Load model from given path.
+        try:
+            new_model = keras.models.load_model(model_path, compile=False)
+        except: 
+            # Raise a warning if model can not be found.
+            raise RuntimeWarning("New model could not be loaded.")
+        
+        # Compile model.
+        try:
+            new_model.compile(
+                optimizer="adam",
+                loss="categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+        except:
+            raise RuntimeWarning("Issue compiling model. No changes to the current model have been made.")
+        
+        # Store model in memory.
+        self.model = new_model
 
 
     def calculate_best_model(self) -> None:
-        gesture_data = get_all_coordinates_as_array(db=self.__get_db().__next__())
-        classification_data = get_classifications(db=self.__get_db().__next__())
+        # Get data from database.
+        try:
+            gesture_data = get_all_coordinates_as_array(db=self.__get_db().__next__(), limit=999)
+            classification_data = get_classifications(db=self.__get_db().__next__(), limit=999)
+        except:
+            raise RuntimeError("Could not fetch data. Ensure a database with valid entries exists.")
 
         # Convert [SWIPE_LEFT, SWIPE_RIGHT, ...] to [0, 1, ...].
         classification_map = {classification: value for value, classification in enumerate(GESTURE_LIST)}
@@ -119,22 +145,21 @@ class TrainNeuralNetwork:
         # Get the best hyperparameters.
         best_hyperparameters = self.tuner.get_best_hyperparameters(num_trials=1)[0]
         print(best_hyperparameters.values)
-        best_model = self.build_model(best_hyperparameters)
+        self.model = self.build_model(best_hyperparameters)
         
-        # Train the model with the complete dataset.
+        # Train the model on the complete dataset.
         X = np.concatenate((X_train, X_test), axis=0)
         y = np.concatenate((y_train, y_test), axis=0)
-        best_model.fit(X, y, epochs=2)
+        self.model.fit(X, y, epochs=2)
 
-        # Save the model and its weights
-        best_model.save("keras/best_model.h5", overwrite=True)
+        # Save the model and its weights.
+        self.model.save("keras/best_model.h5", overwrite=True)
 
-        best_model.summary()
+        self.model.summary()
 
 
 if __name__ == "__main__":
     tnn = TrainNeuralNetwork()
-    # tnn.calculate_best_model(keras_tuner.HyperParameters())
     tnn.calculate_best_model()
 
 

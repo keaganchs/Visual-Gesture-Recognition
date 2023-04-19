@@ -90,30 +90,36 @@ class HandHistoryEncoder(JSONEncoder):
         return json_frames_list
 
 
-def convert_dict_to_array(obj: dict | list) -> npt.ArrayLike:
+def convert_video_to_array(video: dict) -> npt.ArrayLike:
+    num_frames = VIDEO_LENGTH
+    output_array = np.zeros((num_frames, 21, 3))
+
+    for frame in video["frames"]:
+        frame_idx = frame["frame_idx"]
+
+        # If no landmark data exists, leave output_array as zero for this block.
+        if frame["landmarks"] is not None:
+            for landmark in frame["landmarks"]:
+                landmark_idx = landmark["landmark_idx"]
+
+                # Get coordinates.
+                x, y, z = landmark["x"], landmark["y"], landmark["z"]
+
+                output_array[frame_idx, landmark_idx] = [x, y, z]
+        else:
+            continue
+
+    return output_array
+
+def convert_list_of_videos_to_array(obj: List[dict]) -> npt.ArrayLike:
     # Initialize empty array with n frames, 21 landmarks, and 3 coordinates (x, y, z).
     num_datapoints = len(obj)
     num_frames = VIDEO_LENGTH
     output_array = np.zeros((num_datapoints, num_frames, 21, 3))
 
     for video_idx, video in enumerate(obj):
-        # print("Video: ", video[0]["frames"])
-        for frame in video[0]["frames"]:
-            # print("Frame: ", frame)
-            frame_idx = frame["frame_idx"]
+        output_array[video_idx] = convert_video_to_array(video)
 
-            if frame["landmarks"] is not None:
-                for landmark in frame["landmarks"]:
-                    landmark_idx = landmark["landmark_idx"]
-
-                    # Get coordinates.
-                    x, y, z = landmark["x"], landmark["y"], landmark["z"]
-
-                    output_array[video_idx, frame_idx, landmark_idx] = [x, y, z]
-            else:
-                continue
-
-    # print(output_array)
     return output_array
 
 
@@ -129,8 +135,8 @@ def get_gestures_by_classification(db: Session, classification: str, skip: int =
 
 # Get all hand coordinates, parse as a 3D Numpy array, then return.
 def get_all_coordinates_as_array(db: Session, skip: int = 0, limit: int = 100) -> npt.ArrayLike:
-    dict_data = db.query(db_models.Gesture.hand_coordinates).offset(skip).limit(limit).all()
-    return convert_dict_to_array(dict_data)
+    dict_data = [data for data, in db.query(db_models.Gesture.hand_coordinates).offset(skip).limit(limit).all()]
+    return convert_list_of_videos_to_array(dict_data)
 
 
 # Get all classifications.

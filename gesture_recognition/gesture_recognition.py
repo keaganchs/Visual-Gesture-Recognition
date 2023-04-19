@@ -8,7 +8,7 @@ import mediapipe.python.solutions.hands as mp_hands
 from mediapipe.python.solutions.drawing_utils import draw_landmarks
 from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks_style, get_default_hand_connections_style
 
-from api.gestures import HandHistoryEncoder, convert_dict_to_array
+from api.gestures import HandHistoryEncoder, convert_video_to_array
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
@@ -43,6 +43,9 @@ class GestureRecognition:
         # Store gesture list to draw available gestures on the screen.
         self.gesture_list = gesture_list
 
+        # Toggle if the gesture recognition model should be called.
+        self.is_trying_to_detect = False
+
         # Bool to stop multiple gestures from being detected at once.
         self.is_gesture_detected = False
 
@@ -72,11 +75,21 @@ class GestureRecognition:
 
 
     def __draw_gesture_list(self) -> None:
+        cv2.putText(
+            img=self.frame, 
+            text="Available Gestures:", 
+            org=(20, 20), 
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale=0.5, color=(0, 255, 0), 
+            thickness=1, 
+            lineType=cv2.LINE_AA, 
+            bottomLeftOrigin=False)
+        # Write available gestures from the input.
         for idx, gesture in enumerate(self.gesture_list):
             cv2.putText(
                 img=self.frame, 
                 text=f"{gesture}", 
-                org=(20, 20 + (20 * idx)), 
+                org=(20, 40 + (20 * idx)), 
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                 fontScale=0.5, color=(0, 255, 0), 
                 thickness=1, 
@@ -106,31 +119,45 @@ class GestureRecognition:
             self.stop()
         # For any other key press:
         else:
-            # If a gesture is currently detected, ignore other key presses.
-            if self.is_gesture_detected:
-                return
-            # Store this key press
-            self.last_useful_key_press = key_press
+            print("Key press: ", key_press)
+            
+            # On spacebar, toggle self.is_trying_to_detect.
+            if key_press == 32:
+                self.is_trying_to_detect = not self.is_trying_to_detect
 
 
+    # TODO: Optimize.
     def __preprocess_last_recorded_frames(self) -> npt.ArrayLike:
+        # HandHistoryEncoder formats to JSON string.
         json_hand_positions=json.dumps(self.last_hand_positions, cls=HandHistoryEncoder)
-        return convert_dict_to_array(json_hand_positions)
+        # Convert formatted data into a python dict.
+        dict_hand_positions = json.loads(json_hand_positions)
+        # Convert to array.
+        array_hand_positions = convert_video_to_array(dict_hand_positions)
+        # Convert to Tensor and return.
+        # tensor = tf.convert_to_tensor(array_hand_positions, dtype=tf.float32)
+        array_hand_positions = tf.expand_dims(array_hand_positions, axis=0)
+        return array_hand_positions
+
 
     def __check_for_gesture(self) -> (str | None):
         if self.model is not None:
-            # Only detect one gesture at a time
             input = self.__preprocess_last_recorded_frames()
-            return self.model(input)
+            print(input)
+            output = self.model(input)
+            print(output)
+            return output
         
 
     def load_model(self, model_path: str) -> None:
+        # Load model from given path.
         try:
             new_model = keras.models.load_model(model_path, compile=False)
         except: 
             # Raise a warning if model can not be found.
             raise RuntimeWarning("New model could not be loaded.")
         
+        # Compile model.
         try:
             new_model.compile(
                 optimizer="adam",
@@ -181,9 +208,11 @@ class GestureRecognition:
                 self.__draw_gesture_list()
                 self.__draw_detected_gesture()
 
-                if not self.is_gesture_detected:
-                    output = self.__check_for_gesture()
-                    print("Output of model: ", output)
+                if self.is_trying_to_detect:
+                    # Only detect one gesture at a time
+                    if not self.is_gesture_detected:
+                        output = self.__check_for_gesture()
+                        print("Output of model: ", output)
 
                 # Get keyboard input.
                 key_press = cv2.waitKey(10)
@@ -202,6 +231,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    ga = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
-    ga.start()
+    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
+    gr.start()
 
