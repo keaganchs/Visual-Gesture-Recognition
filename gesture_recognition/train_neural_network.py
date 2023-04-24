@@ -16,19 +16,17 @@ from api.gestures import get_all_coordinates_as_array, get_classifications
 from sklearn.model_selection import train_test_split
 
 class TrainNeuralNetwork:
-    def __init__(self, model_path = None):
+    def __init__(self, save_model_path = "keras/best_model.h5", hyperopt_max_trials = 25):
         # Store a trained model.
         self.model = None
-
-        # Load model if given.
-        if model_path is not None:
-            self.load_model(model_path=model_path)
+        # Path where the best model will be saved.
+        self.save_model_path = save_model_path
         
         # Set up tuner for hyperparameter optimization.
         self.tuner = keras_tuner.RandomSearch(
             hypermodel=self.build_model,
             objective="val_accuracy",
-            max_trials=3,
+            max_trials=hyperopt_max_trials,
             executions_per_trial=2,
             overwrite=True,
             directory="keras",
@@ -70,7 +68,7 @@ class TrainNeuralNetwork:
             model.add(
                 layers.Dense(
                     # Tune number of units separately.
-                    units=hp.Int(f"units_{i}", min_value=32, max_value=512, step=32),
+                    units=hp.Int(f"units_{i}", min_value=32, max_value=256, step=32),
                     activation=hp.Choice("activation", ["relu", "tanh"]),
                 )
             )
@@ -89,28 +87,6 @@ class TrainNeuralNetwork:
             metrics=["accuracy"],
         )
         return model
-
-
-    def load_model(self, model_path: str) -> None:
-        # Load model from given path.
-        try:
-            new_model = keras.models.load_model(model_path, compile=False)
-        except: 
-            # Raise a warning if model can not be found.
-            raise RuntimeWarning("New model could not be loaded.")
-        
-        # Compile model.
-        try:
-            new_model.compile(
-                optimizer="adam",
-                loss="categorical_crossentropy",
-                metrics=["accuracy"],
-            )
-        except:
-            raise RuntimeWarning("Issue compiling model. No changes to the current model have been made.")
-        
-        # Store model in memory.
-        self.model = new_model
 
 
     def calculate_best_model(self) -> None:
@@ -140,7 +116,7 @@ class TrainNeuralNetwork:
         X_test = tf.convert_to_tensor(X_test, dtype=tf.float32)
 
         # Run hyperparameter optimization to find the optimal parameters.
-        self.tuner.search(X_train, y_train, epochs=2, validation_data=(X_test, y_test))
+        self.tuner.search(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
         
         # Get the best hyperparameters.
         best_hyperparameters = self.tuner.get_best_hyperparameters(num_trials=1)[0]
@@ -150,17 +126,15 @@ class TrainNeuralNetwork:
         # Train the model on the complete dataset.
         X = np.concatenate((X_train, X_test), axis=0)
         y = np.concatenate((y_train, y_test), axis=0)
-        self.model.fit(X, y, epochs=2)
+        self.model.fit(X, y, epochs=10)
 
         # Save the model and its weights.
-        self.model.save("keras/best_model.h5", overwrite=True)
+        self.model.save(filepath=self.save_model_path, overwrite=True)
 
         self.model.summary()
 
 
 if __name__ == "__main__":
-    tnn = TrainNeuralNetwork()
+    tnn = TrainNeuralNetwork(hyperopt_max_trials=50)
     tnn.calculate_best_model()
-
-
 
