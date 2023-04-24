@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 from collections import deque
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import mediapipe.python.solutions.hands as mp_hands
@@ -21,7 +21,7 @@ keras = tf.keras
 
 
 class GestureRecognition:  
-    def __init__(self, model_path: str, gesture_list: List, video_length: int, debug = False):   
+    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold = 0.9):   
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
         # Will store the current frame.
@@ -46,11 +46,15 @@ class GestureRecognition:
         # Toggle if the gesture recognition model should be called.
         self.is_trying_to_detect = False
 
+        # Confidence threshold for detecting a gesture.
+        self.threshold = detection_threshold
+
         # Bool to stop multiple gestures from being detected at once.
         self.is_gesture_detected = False
 
-        # Store a detected gesture.
+        # Store a detected gesture and the confidence in that prediction.
         self.detected_gesture = None
+        self.detection_confidence = None
         
         # Count frames since the gesture was detected. 
         self.detected_gesture_frame_idx = None
@@ -75,6 +79,7 @@ class GestureRecognition:
 
 
     def __draw_gesture_list(self) -> None:
+        # Show "Available Gestures" on the image.
         cv2.putText(
             img=self.frame, 
             text="Available Gestures:", 
@@ -84,7 +89,7 @@ class GestureRecognition:
             thickness=1, 
             lineType=cv2.LINE_AA, 
             bottomLeftOrigin=False)
-        # Write available gestures from the input.
+        # Show available gestures from the given input.
         for idx, gesture in enumerate(self.gesture_list):
             cv2.putText(
                 img=self.frame, 
@@ -140,13 +145,24 @@ class GestureRecognition:
         return array_hand_positions
 
 
-    def __check_for_gesture(self) -> (str | None):
+    def __check_for_gesture(self) -> Tuple[float | None, float]:
         if self.model is not None:
             input = self.__preprocess_last_recorded_frames()
-            print(input)
-            output = self.model(input)
-            print(output)
-            return output
+            output = self.model(input).numpy()[0]
+            # print(output)
+
+            # The values in the output nodes are confidences of each gesture being the input.
+            # The prediction is the highest confidence. 
+            prediction_idx = np.argmax(output)
+            confidence = output[prediction_idx]
+            
+            # Return the name of the gesture if the confidence is above the threshold.
+            if confidence > self.threshold:
+                prediction = self.gesture_list[prediction_idx]
+            else:
+                prediction = None
+            
+            return prediction, confidence
         
 
     def load_model(self, model_path: str) -> None:
@@ -201,18 +217,19 @@ class GestureRecognition:
                 # Mark image as writable again to draw on the frame.
                 self.frame.flags.writeable = True
 
-                # Draw hand landmarks and index fingertip history.
+                # Draw hand landmarks.
                 self.__draw_hand_landmarks(self.frame, current_hand_landmarks)
 
-                # Draw available gestures on the flipped image.
+                # Draw available gestures.
                 self.__draw_gesture_list()
                 self.__draw_detected_gesture()
 
                 if self.is_trying_to_detect:
                     # Only detect one gesture at a time
                     if not self.is_gesture_detected:
-                        output = self.__check_for_gesture()
-                        print("Output of model: ", output)
+                        prediction, confidence = self.__check_for_gesture()
+                        if prediction:
+                            print(f"Output of model: {prediction} with {confidence}% confidence.")
 
                 # Get keyboard input.
                 key_press = cv2.waitKey(10)
