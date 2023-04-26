@@ -6,11 +6,16 @@ from database import db_models, pydantic_models
 import numpy as np
 import numpy.typing as npt
 
-from database.db import VIDEO_LENGTH
+from database.db import GESTURE_LIST, VIDEO_LENGTH
 
 import json
 from json import JSONEncoder, JSONDecoder
 from collections import deque
+
+import tensorflow as tf
+# Use this import method for VS Code IntelliSense
+keras = tf.keras
+
 
 class HandHistoryEncoder(JSONEncoder):
     def default(self, obj):
@@ -142,6 +147,23 @@ def get_all_coordinates_as_array(db: Session, skip: int = 0, limit: int = 100) -
 # Get all classifications.
 def get_classifications(db: Session, skip: int = 0, limit: int = 100):
     return [classification for classification, in db.query(db_models.Gesture.classification).offset(skip).limit(limit).all()]
+
+
+# Get all classifications as categotical data.
+def get_classifications_as_categorical(db: Session, skip: int = 0, limit: int = 100):
+    classification_data = [classification for classification, in db.query(db_models.Gesture.classification).offset(skip).limit(limit).all()]
+    
+    # Convert [SWIPE_LEFT, SWIPE_RIGHT, ...] to [0, 1, ...].
+    classification_map = {classification: value for value, classification in enumerate(GESTURE_LIST)}
+    num_classifications = len(classification_map)
+
+    # Create output vector.
+    y = np.zeros(len(classification_data))
+    for i, data in enumerate(classification_data):
+        y[i] = classification_map[data]
+
+    # Convert values to categorical (e.g. [0, 1, 2, 3] -> [0, 0], [0, 1], [1, 0], [1, 1]).
+    return keras.utils.to_categorical(y, num_classes=num_classifications)
 
 
 # Get all gestures.
