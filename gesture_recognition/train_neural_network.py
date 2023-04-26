@@ -11,7 +11,7 @@ import json
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
-from api.gestures import get_all_coordinates_as_array, get_classifications
+from api.gestures import get_all_coordinates_as_array, get_classifications_as_categorical
 
 from sklearn.model_selection import train_test_split
 
@@ -93,24 +93,12 @@ class TrainNeuralNetwork:
         # Get data from database.
         try:
             gesture_data = get_all_coordinates_as_array(db=self.__get_db().__next__(), limit=999)
-            classification_data = get_classifications(db=self.__get_db().__next__(), limit=999)
+            classification_data = get_classifications_as_categorical(db=self.__get_db().__next__(), limit=999)
         except:
             raise RuntimeError("Could not fetch data. Ensure a database with valid entries exists.")
-
-        # Convert [SWIPE_LEFT, SWIPE_RIGHT, ...] to [0, 1, ...].
-        classification_map = {classification: value for value, classification in enumerate(GESTURE_LIST)}
-        num_classifications = len(classification_map)
-
-        # Create output vector.
-        y = np.zeros(len(classification_data))
-        for i, data in enumerate(classification_data):
-            y[i] = classification_map[data]
-
-        # Convert values to categorical (e.g. [0, 1, 2, 3] -> [0, 0], [0, 1], [1, 0], [1, 1]).
-        y = keras.utils.to_categorical(y, num_classes=num_classifications)
         
         # Create a train/test split.
-        X_train, X_test, y_train, y_test = train_test_split(gesture_data, y, test_size=0.20)
+        X_train, X_test, y_train, y_test = train_test_split(gesture_data, classification_data, test_size=0.20)
 
         X_train = tf.convert_to_tensor(X_train, dtype=tf.float32)
         X_test = tf.convert_to_tensor(X_test, dtype=tf.float32)
@@ -135,6 +123,6 @@ class TrainNeuralNetwork:
 
 
 if __name__ == "__main__":
-    tnn = TrainNeuralNetwork(hyperopt_max_trials=50)
+    tnn = TrainNeuralNetwork(hyperopt_max_trials=10)
     tnn.calculate_best_model()
 
