@@ -21,7 +21,7 @@ keras = tf.keras
 
 
 class GestureRecognition:  
-    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold = 0.9):   
+    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold = 0.95):   
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
         # Will store the current frame.
