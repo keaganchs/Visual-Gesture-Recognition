@@ -185,9 +185,21 @@ class FeatureImportance:
             print("Top scores: ", top_scores, "\n")
             print("Top p-values: ", top_p_values, "\n")
 
+    def permutation_importance(self, model_path: str, X_train: List = None, y_train: List = None):
+        self.__check_data_or_fetch_from_db(X_train, y_train)
+
+        model = keras.models.load_model(model_path, compile=False)
+        model.compile(
+            optimizer="adam",
+            loss="categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+
+        result = permutation_importance(estimator=model, x=self.X_train, y=self.y_train)
+        print(result.importances_std)
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.calculate_rfc_importance(n_estimators=500, max_features=15, savefig=True)
-    fi.calculate_kbest_importance(max_features=10, savefig=True)
-
+    # fi.calculate_rfc_importance(n_estimators=500, max_features=15, savefig=True)
+    # fi.calculate_kbest_importance(max_features=10, savefig=True)
+    fi.permutation_importance(model_path="keras/best_model.h5")
