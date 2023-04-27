@@ -19,6 +19,7 @@ from api.gestures import get_all_coordinates_as_array, get_classifications_as_ca
 import tensorflow as tf
 # Use this import method for VS Code IntelliSense
 keras = tf.keras
+from keras.wrappers.scikit_learn import KerasClassifier
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
@@ -185,18 +186,6 @@ class FeatureImportance:
             print("Top scores: ", top_scores, "\n")
             print("Top p-values: ", top_p_values, "\n")
 
-    def permutation_importance(self, model_path: str, X_train: List = None, y_train: List = None):
-        self.__check_data_or_fetch_from_db(X_train, y_train)
-
-        model = keras.models.load_model(model_path, compile=False)
-        model.compile(
-            optimizer="adam",
-            loss="categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-
-        result = permutation_importance(estimator=model, x=self.X_train, y=self.y_train)
-        print(result.importances_std)
 
 if __name__ == "__main__":
     fi = FeatureImportance()
