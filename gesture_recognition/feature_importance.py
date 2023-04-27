@@ -3,6 +3,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
 from sklearn.datasets import make_classification
+from sklearn.feature_selection import SelectKBest
 
 import datetime
 import numpy as np
@@ -12,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from typing import List, AnyStr, Tuple
 
-from api.gestures import get_all_coordinates_as_array, get_classifications_as_categorical
+from api.gestures import get_all_coordinates_as_array, get_classifications_as_categorical, get_classifications
 
 # Import TensorFlow for keras.utils.to_categorical
 import tensorflow as tf
@@ -22,6 +23,7 @@ keras = tf.keras
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
 from helper_functions import time_this
+
 
 HAND_LANDMARKS = [
     "WRIST",
@@ -51,6 +53,10 @@ HAND_LANDMARKS = [
 class FeatureImportance:
     def __init__(self):
         self.feature_names = []
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
 
         for frame_idx in range(30):
             for landmark in HAND_LANDMARKS:
@@ -72,6 +78,11 @@ class FeatureImportance:
             db.close()
 
 
+    def __flatten(self, arr: List) -> npt.NDArray:
+        # TODO: Update flatten function to work for any data.
+        return np.array(arr).reshape((len(arr), 1890))
+    
+
     def __get_training_data_from_db(self) -> Tuple[List, List]:
         # Get data from database.
         try:
@@ -83,72 +94,100 @@ class FeatureImportance:
         return gesture_data, classification_data
 
 
-    def __fit_forest_classifier(self, X_train: List, y_train: List) -> RandomForestClassifier:
-        forest = RandomForestClassifier(n_estimators=2000)
-        forest.fit(X_train, y_train)
+    def __check_data_or_fetch_from_db(self, X_train: List, y_train: List, X_test: List = None, y_test: List = None) -> None:
+        # If no input data is given, fetch from DB if no data is already saved..
+        if X_train is None or y_train is None:
+            if self.X_train is None or y_train is None:
+                # Warn about overwriting if only one of self.X_train or self.y_train is set.
+                if not (X_train is None and y_train is None):
+                    print("WARNING: overwriting X_train and y_train with data from database because one of the two is None.")
 
+                # Get data from database and create a train/test split.
+                gesture_data, classification_data = self.__get_training_data_from_db()
+                self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.__flatten(gesture_data), classification_data, test_size=0.20)
+        else:
+            # TODO: Add validation.
+            self.X_train = X_train
+            self.X_test = X_test
+            self.y_train = y_train
+            self.y_test = y_test
+
+
+    def calculate_rfc_importance(self, X_train: List = None, y_train: List = None, n_estimators: int = 1000, max_features: int = 10, savefig: bool = True) -> None:
+        self.__check_data_or_fetch_from_db(X_train, y_train)
+
+        forest = RandomForestClassifier(n_estimators=n_estimators)
+        forest.fit(self.X_train, self.y_train)
+        
         importances = forest.feature_importances_
         std = np.std([tree.feature_importances_ for tree in forest.estimators_], axis=0)
 
-        return forest, importances, std
-
-
-    def __plot_importances(self, forest_importances: AnyStr, std_deviation: AnyStr, max_features: int = 10) -> None:
         top_feature_names = []
         top_importances = []
         top_std_devs = []
 
-        # Get the n = max_features most important features.
-        print(np.sort(forest_importances))
-        sorted_indices = np.argsort(forest_importances)[-max_features:]
+        sorted_indices = np.argsort(importances)[-max_features:]
 
         for idx in sorted_indices:
-            top_importances.append(forest_importances[idx])
+            top_importances.append(importances[idx])
             top_feature_names.append(self.feature_names[idx])
-            top_std_devs.append(std_deviation[idx])
+            top_std_devs.append(std[idx])
 
-        plt.bar(range(max_features), top_importances, yerr=top_std_devs)
-        plt.title("Feature Importance")
-        plt.ylabel("Mean accuracy decrease")
-        plt.xticks(range(max_features), top_feature_names, rotation=45, ha="right")
-        plt.tight_layout()
+        if savefig:
+            # Plot most important features.
+            plt.bar(range(max_features), top_importances, yerr=top_std_devs)
+            plt.title(f"Feature Importance from Mean Decrease in Impurity\n(n_estimators = {n_estimators}).")
+            plt.ylabel("Mean accuracy decrease")
+            plt.xticks(range(max_features), top_feature_names, rotation=45, ha="right")
+            plt.tight_layout()
 
-        filename = "plots/plot_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
-        plt.savefig(filename)
-
-
-    def __flatten(self, arr: List) -> npt.NDArray:
-        return np.array(arr).reshape((len(arr), 1890))
+            # Save plot.
+            filename = "plots/rfc_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
+            plt.savefig(filename)
+        else:
+            # If not saving a plot, print top values.
+            print("Top feature names:\n", top_feature_names)
+            print("Top importances:\n", top_importances)
+            print("Top standard deviations:\n", top_std_devs)
     
 
-    def start(self) -> None:
-        # Get data from database and create a train/test split.
-        gesture_data, classification_data = self.__get_training_data_from_db()
-        X_train, X_test, y_train, y_test = train_test_split(self.__flatten(gesture_data), classification_data, test_size=0.20)
+    def calculate_kbest_importance(self, max_features: int = 10, savefig: bool = True) -> None:
+        skb = SelectKBest(k=max_features)
+        skb.fit(X=self.__flatten(get_all_coordinates_as_array(db=self.__get_db().__next__())), y=get_classifications(db=self.__get_db().__next__()))
 
-
-        _, importances, std = self.__fit_forest_classifier(X_train, y_train)
-        self.__plot_importances(forest_importances=importances, std_deviation=std)
-
-        # result = permutation_importance(
-        #     forest, X_test, y_test, n_repeats=100, n_jobs=-1
-        # )
-        # print(result)
+        top_feature_names = []
+        top_scores = np.zeros(max_features)
+        top_p_values = np.zeros(max_features)
         
-        # importances = result.importances
-        # sorted_indices = np.argsort(importances)[::-1]
-        
-        # p_values = []
-        # for idx in sorted_indices:
-        #     X_permuted = X_train.copy()
-        #     np.random.shuffle(X_permuted[:, idx])
-        #     _, permuted_importances, _ = permutation_importance(forest, X_permuted, , n_repeats=5)
-        #     p_value = np.mean(permuted_importances >= importances[idx])
-        #     p_values.append(p_value)
+        for idx, feature_idx in enumerate(skb.get_support(indices=True)):
+            top_scores[idx] = skb.scores_[feature_idx]
+            top_p_values[idx] = skb.pvalues_[feature_idx]
+            top_feature_names.append(self.feature_names[feature_idx])
 
-        # self.__plot_importances(forest_importances, result.importances_std)
+        if savefig:
+            x_labels = []
+            for idx in range(max_features):
+                x_labels.append(f"{top_feature_names[idx]}, p={top_p_values[idx]:.1E}")
+
+            # Plot most important features.
+            plt.bar(range(max_features), top_scores)
+            plt.title(f"Feature Importance from ANOVA F-value).")
+            plt.ylabel("Score")
+            plt.xticks(range(max_features), x_labels, rotation=45, ha="right")
+            plt.tight_layout()
+
+            # Save plot.
+            filename = "plots/kbest_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
+            plt.savefig(filename)
+        else:
+            # If not saving a plot, print top values.
+            print("Top feature names: ", top_feature_names, "\n")
+            print("Top scores: ", top_scores, "\n")
+            print("Top p-values: ", top_p_values, "\n")
 
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.start()
+    fi.calculate_rfc_importance(n_estimators=500, max_features=15, savefig=True)
+    fi.calculate_kbest_importance(max_features=10, savefig=True)
+
