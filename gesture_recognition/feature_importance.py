@@ -23,7 +23,7 @@ from keras.wrappers.scikit_learn import KerasClassifier
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
 from database import db_models, pydantic_models
-from helper_functions import time_this
+from api.helper_functions import time_this
 
 
 HAND_LANDMARKS = [
