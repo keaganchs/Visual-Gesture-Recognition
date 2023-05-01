@@ -38,6 +38,7 @@ The files are organized such that all files that can be run are in the `./gestur
 │   └── train_neural_network.py  
 ├── .gitignore  
 ├── CITATION.cff  
+├── README.md  
 └── requirements.txt  
 ```
 
