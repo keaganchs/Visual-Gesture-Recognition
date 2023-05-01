@@ -7,3 +7,5 @@
 /gesture_recognition/gesture_annotation/__pycache__
 
 /MiscHandTracking/__pycache__
+
+/gesture_recognition/keras/visual_gesture_recognition

@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from typing import Literal
 
 VIDEO_LENGTH = 30 # Number of frames
-GESTURE_LIST = ["SWIPE_LEFT", "SWIPE_RIGHT"]
+GESTURE_LIST = ["SWIPE_LEFT", "SWIPE_RIGHT", "CW_CIRCLE", "CCW_CIRCLE"]
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 

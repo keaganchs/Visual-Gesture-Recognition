@@ -21,7 +21,7 @@ keras = tf.keras
 
 
 class GestureRecognition:  
-    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold = 0.95):   
+    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold: float = 0.95, print_output: bool = False):   
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
         # Will store the current frame.
@@ -46,6 +46,9 @@ class GestureRecognition:
         # Toggle if the gesture recognition model should be called.
         self.is_trying_to_detect = False
 
+        # Toggle if the raw output of the model should be printed.
+        self.is_printing_output = print_output
+
         # Confidence threshold for detecting a gesture.
         self.threshold = detection_threshold
 
@@ -53,8 +56,8 @@ class GestureRecognition:
         self.is_gesture_detected = False
 
         # Store a detected gesture and the confidence in that prediction.
-        self.detected_gesture = None
-        self.detection_confidence = None
+        self.prediction = None
+        self.prediction_confidence = None
         
         # Count frames since the gesture was detected. 
         self.detected_gesture_frame_idx = None
@@ -76,6 +79,19 @@ class GestureRecognition:
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS, get_default_hand_landmarks_style(), get_default_hand_connections_style())
+
+
+    def __draw_toggle_detection(self) -> None:
+        # Show "Enable/Disable Detection".
+        cv2.putText(
+            img=self.frame, 
+            text=("[spacebar]: Disable Detection" if self.is_trying_to_detect else "[spacebar]: Enable Detection"), 
+            org=(200, 470), 
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale=0.5, color=(0, 255, 0), 
+            thickness=1, 
+            lineType=cv2.LINE_AA, 
+            bottomLeftOrigin=False)
 
 
     def __draw_gesture_list(self) -> None:
@@ -103,10 +119,10 @@ class GestureRecognition:
          
     
     def __draw_detected_gesture(self) -> None:
-        if self.detected_gesture is not None:
+        if self.prediction is not None:
             cv2.putText(
                 img=self.frame, 
-                text=f"{self.detected_gesture}", 
+                text=f"Output of model: {self.prediction} with {self.prediction_confidence:0.2F}% confidence.", 
                 org=(200, 450), 
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                 fontScale=0.5, color=(0, 255, 0), 
@@ -124,8 +140,6 @@ class GestureRecognition:
             self.stop()
         # For any other key press:
         else:
-            print("Key press: ", key_press)
-            
             # On spacebar, toggle self.is_trying_to_detect.
             if key_press == 32:
                 self.is_trying_to_detect = not self.is_trying_to_detect
@@ -145,11 +159,14 @@ class GestureRecognition:
         return array_hand_positions
 
 
-    def __check_for_gesture(self) -> Tuple[float | None, float]:
+    def __check_for_gesture(self) -> None:
         if self.model is not None:
             input = self.__preprocess_last_recorded_frames()
             output = self.model(input).numpy()[0]
-            # print(output)
+
+            # If printing is enabled, print the raw value of each output node.
+            if self.is_printing_output:
+                print(["{0:0.4f}".format(weight) for weight in output])
 
             # The values in the output nodes are confidences of each gesture being the input.
             # The prediction is the highest confidence. 
@@ -158,11 +175,11 @@ class GestureRecognition:
             
             # Return the name of the gesture if the confidence is above the threshold.
             if confidence > self.threshold:
-                prediction = self.gesture_list[prediction_idx]
+                self.prediction = self.gesture_list[prediction_idx]
+                self.prediction_confidence = confidence
             else:
-                prediction = None
-            
-            return prediction, confidence
+                self.prediction = None
+                self.prediction_confidence = None
         
 
     def load_model(self, model_path: str) -> None:
@@ -222,14 +239,23 @@ class GestureRecognition:
 
                 # Draw available gestures.
                 self.__draw_gesture_list()
-                self.__draw_detected_gesture()
+
+                # Draw toggle option.
+                self.__draw_toggle_detection()
 
                 if self.is_trying_to_detect:
-                    # Only detect one gesture at a time
+                    # Only detect one gesture at a time.
                     if not self.is_gesture_detected:
-                        prediction, confidence = self.__check_for_gesture()
-                        if prediction:
-                            print(f"Output of model: {prediction} with {confidence}% confidence.")
+                        self.__check_for_gesture()
+                        if self.prediction:
+                            self.__draw_detected_gesture()
+                            if self.is_printing_output:
+                                print(f"Output of model: {self.prediction} with {self.prediction_confidence:0.4F}% confidence.")
+                else:
+                    # Clear predicitons when stopping detection.
+                    self.prediction = None
+                    self.prediction_confidence = None
+
 
                 # Get keyboard input.
                 key_press = cv2.waitKey(10)
@@ -248,6 +274,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH)
+    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.80, print_output=True)
     gr.start()
 

@@ -189,5 +189,5 @@ class FeatureImportance:
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.calculate_rfc_importance(n_estimators=500, max_features=15, savefig=True)
-    fi.calculate_kbest_importance(max_features=10, savefig=True)
+    fi.calculate_rfc_importance(n_estimators=5000, max_features=20, savefig=True)
+    fi.calculate_kbest_importance(max_features=20, savefig=True)
