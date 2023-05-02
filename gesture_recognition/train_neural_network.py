@@ -118,7 +118,7 @@ class TrainNeuralNetwork:
         plt.title("Evaluation Metrics", size=16)
         plt.xlabel("Epoch", size=12)
         plt.legend()
-        plt.savefig("plots/model_info.png")
+        plt.savefig("plots_and_data/model_info.png")
 
 
     def calculate_best_model(self, num_epochs: int = 10, savefig: bool = False) -> None:

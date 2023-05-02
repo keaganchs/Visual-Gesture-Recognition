@@ -117,7 +117,7 @@ class FeatureImportance:
             "Importance": importances,
             "Standard Deviation": std
         })
-        df.to_csv("plots/rfc_dataframe.csv")
+        df.to_csv("plots_and_data/rfc_dataframe.csv")
 
         top_feature_names = []
         top_importances = []
@@ -139,7 +139,7 @@ class FeatureImportance:
             plt.tight_layout()
 
             # Save plot.
-            filename = "plots/rfc_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
+            filename = "plots_and_data/rfc_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
             plt.savefig(filename)
         else:
             # If not saving a plot, print top values.
@@ -174,7 +174,7 @@ class FeatureImportance:
             plt.tight_layout()
 
             # Save plot.
-            filename = "plots/kbest_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
+            filename = "plots_and_data/kbest_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
             plt.savefig(filename)
         else:
             # If not saving a plot, print top values.
