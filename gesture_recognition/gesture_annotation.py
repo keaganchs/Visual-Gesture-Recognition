@@ -10,7 +10,7 @@ from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks
 
 from api.gestures import create_gesture, HandHistoryEncoder
 
-from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
+from database.db import GESTURE_LIST, VIDEO_LENGTH, engine, get_db
 from database import db_models, pydantic_models
 
 import json
@@ -50,16 +50,9 @@ class GestureAnnotation:
         except:
             raise RuntimeError("Error creating a database connection.")
 
+
     def __del__(self):
         self.stop()
-
-
-    def __get_db(self):
-        db = SessionLocal()
-        try: 
-            yield db
-        finally:
-            db.close()
 
 
     def __start_webcam(self) -> None:
@@ -195,7 +188,7 @@ class GestureAnnotation:
 
                 # Create new gesture entry in the database.
                 create_gesture(
-                    db=self.__get_db().__next__(),
+                    db=get_db().__next__(),
                     gesture=pydantic_models.GestureCreate(
                         sequence_length=VIDEO_LENGTH,
                         classification=self.gesture_dict[chr(self.last_useful_key_press)],

@@ -1,8 +1,5 @@
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from sklearn.inspection import permutation_importance
-from sklearn.datasets import make_classification
 from sklearn.feature_selection import SelectKBest
 
 import datetime
@@ -11,7 +8,7 @@ import numpy.typing as npt
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from typing import List, AnyStr, Tuple
+from typing import List, Tuple
 
 from api.gestures import get_all_coordinates_as_array, get_classifications_as_categorical, get_classifications
 
@@ -19,13 +16,12 @@ from api.gestures import get_all_coordinates_as_array, get_classifications_as_ca
 import tensorflow as tf
 # Use this import method for VS Code IntelliSense
 keras = tf.keras
-from keras.wrappers.scikit_learn import KerasClassifier
 
-from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
-from database import db_models, pydantic_models
-from api.helper_functions import time_this
+from database.db import engine, get_db
+from database import db_models
 
 
+# The 21 hand landmarks used by Mediapipe.Hands
 HAND_LANDMARKS = [
     "WRIST",
     "THUMB_CMC",
@@ -71,14 +67,6 @@ class FeatureImportance:
             raise RuntimeError("Error creating a database connection.")
 
 
-    def __get_db(self):
-        db = SessionLocal()
-        try: 
-            yield db
-        finally:
-            db.close()
-
-
     def __flatten(self, arr: List) -> npt.NDArray:
         # TODO: Update flatten function to work for any data.
         return np.array(arr).reshape((len(arr), 1890))
@@ -87,8 +75,8 @@ class FeatureImportance:
     def __get_training_data_from_db(self) -> Tuple[List, List]:
         # Get data from database.
         try:
-            gesture_data = get_all_coordinates_as_array(db=self.__get_db().__next__(), limit=999)
-            classification_data = get_classifications_as_categorical(db=self.__get_db().__next__(), limit=999)
+            gesture_data = get_all_coordinates_as_array(db=get_db().__next__(), limit=999)
+            classification_data = get_classifications_as_categorical(db=get_db().__next__(), limit=999)
         except:
             raise RuntimeError("Could not fetch data. Ensure a database with valid entries exists.")
 
@@ -123,12 +111,20 @@ class FeatureImportance:
         importances = forest.feature_importances_
         std = np.std([tree.feature_importances_ for tree in forest.estimators_], axis=0)
 
+        # Save data to a .csv file.
+        df = pd.DataFrame({
+            "Feature Name": self.feature_names,
+            "Importance": importances,
+            "Standard Deviation": std
+        })
+        df.to_csv("plots/rfc_dataframe.csv")
+
         top_feature_names = []
         top_importances = []
         top_std_devs = []
 
+        # Sort importances for plotting.
         sorted_indices = np.argsort(importances)[-max_features:]
-
         for idx in sorted_indices:
             top_importances.append(importances[idx])
             top_feature_names.append(self.feature_names[idx])
@@ -154,7 +150,7 @@ class FeatureImportance:
 
     def calculate_kbest_importance(self, max_features: int = 10, savefig: bool = True) -> None:
         skb = SelectKBest(k=max_features)
-        skb.fit(X=self.__flatten(get_all_coordinates_as_array(db=self.__get_db().__next__())), y=get_classifications(db=self.__get_db().__next__()))
+        skb.fit(X=self.__flatten(get_all_coordinates_as_array(db=get_db().__next__())), y=get_classifications(db=get_db().__next__()))
 
         top_feature_names = []
         top_scores = np.zeros(max_features)
@@ -189,5 +185,5 @@ class FeatureImportance:
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.calculate_rfc_importance(n_estimators=5000, max_features=20, savefig=True)
-    fi.calculate_kbest_importance(max_features=20, savefig=True)
+    fi.calculate_rfc_importance(n_estimators=1000, max_features=20, savefig=True)
+    # fi.calculate_kbest_importance(max_features=20, savefig=True)

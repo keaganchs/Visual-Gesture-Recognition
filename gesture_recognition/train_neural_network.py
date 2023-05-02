@@ -1,8 +1,8 @@
 import tensorflow as tf
-# Use this import method for VS Code IntelliSense
+# Use this import method for VS Code IntelliSense.
 keras = tf.keras
 
-from keras import layers, Input
+from keras import layers
 
 from typing import AnyStr, Tuple, List
 
@@ -10,12 +10,9 @@ import numpy as np
 import keras_tuner
  
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
 
-import json
-
-from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
-from database import db_models, pydantic_models
+from database.db import GESTURE_LIST, VIDEO_LENGTH, engine, get_db
+from database import db_models
 from api.gestures import get_all_coordinates_as_array, get_classifications_as_categorical
 
 from sklearn.model_selection import train_test_split
@@ -48,21 +45,13 @@ class TrainNeuralNetwork:
             db_models.Base.metadata.create_all(bind=engine)
         except:
             raise RuntimeError("Error creating a database connection.")
-
-
-    def __get_db(self):
-        db = SessionLocal()
-        try: 
-            yield db
-        finally:
-            db.close()
-
+        
 
     def __get_training_data_from_db(self) -> Tuple[List, List]:
         # Get data from database.
         try:
-            gesture_data = get_all_coordinates_as_array(db=self.__get_db().__next__(), limit=999)
-            classification_data = get_classifications_as_categorical(db=self.__get_db().__next__(), limit=999)
+            gesture_data = get_all_coordinates_as_array(db=get_db().__next__(), limit=999)
+            classification_data = get_classifications_as_categorical(db=get_db().__next__(), limit=999)
         except:
             raise RuntimeError("Could not fetch data. Ensure a database with valid entries exists.")
 
@@ -109,7 +98,7 @@ class TrainNeuralNetwork:
         return model
 
 
-    def __plot_history(self, history: AnyStr, num_epochs: int):
+    def __plot_history(self, history: AnyStr, num_epochs: int) -> None:
         plt.plot(
             np.arange(1, num_epochs+1), 
             history.history["loss"], label="Loss"
@@ -165,14 +154,18 @@ class TrainNeuralNetwork:
         self.model.summary()
 
 
-    def load_model(self, model_path: str = "keras/best_model.h5"):
+    def set_save_model_path(self, new_save_model_path: str) -> None:
+        self.save_model_path = new_save_model_path
+
+
+    def load_model(self) -> None:
         try:
-            self.model = keras.models.load_model(model_path)
+            self.model = keras.models.load_model(self.save_model_path)
         except:
             raise RuntimeError("Error loading model. Check model_path is valid, or run TrainNeuralNetwork.calculate_best_model() if none exists.")
 
 
-    def fit_model_to_db_gestures(self, num_epochs: int = 20, savefig: bool = True):
+    def fit_model_to_db_gestures(self, num_epochs: int = 20, savefig: bool = True) -> None:
         if self.model is None:
             raise RuntimeWarning("Load a model first!")
 
@@ -188,12 +181,13 @@ class TrainNeuralNetwork:
 
         self.model.summary()
 
+
 if __name__ == "__main__":
-    tnn = TrainNeuralNetwork(hyperopt_max_trials=20)
+    tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=20)
 
     # Calculate best model using hyper parameter optimization
-    # tnn.calculate_best_model(num_epochs=20, savefig=True)
+    tnn.calculate_best_model(num_epochs=20, savefig=True)
 
-    # Fit the 
-    tnn.load_model(model_path="keras/best_model.h5")
-    tnn.fit_model_to_db_gestures(num_epochs=50, savefig=True)
+    # Fit the model using a larger number of epochs.
+    # tnn.load_model(model_path="keras/best_model.h5")
+    # tnn.fit_model_to_db_gestures(num_epochs=50, savefig=True)

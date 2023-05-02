@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 from collections import deque
-from typing import List, Tuple
+from typing import List
 
 import cv2
 import mediapipe.python.solutions.hands as mp_hands
@@ -10,13 +10,12 @@ from mediapipe.python.solutions.drawing_styles import get_default_hand_landmarks
 
 from api.gestures import HandHistoryEncoder, convert_video_to_array
 
-from database.db import GESTURE_LIST, VIDEO_LENGTH, SessionLocal, engine
-from database import db_models, pydantic_models
+from database.db import GESTURE_LIST, VIDEO_LENGTH
 
 import json
 
 import tensorflow as tf
-# Use this import method for VS Code IntelliSense
+# Use this import method for VS Code IntelliSense.
 keras = tf.keras
 
 
