@@ -1,5 +1,5 @@
 # Real-time Visual Gesture Recognition
-Code for my bachelor thesis at Jacobs (Constructor) University Bremen.
+Code for my bachelor thesis at Jacobs (Constructor) University Bremen. This is software uses [Mediapipe Hands](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker) for hand tracking and the [TensorFlow Keras](https://keras.io/api/) neural network to predict a gesture based on hand location data.
 
 ## Quick Start
 
@@ -28,7 +28,8 @@ The files are organized such that all files that can be run are in the `./gestur
 │   ├── keras/  
 │   │   └── best_model.h5  
 │   ├── plots/  
-│   │   └── matplotlib_plot.png  
+│   │   ├── model_info.png 
+│   │   └── rfc_dataframe.csv 
 │   ├── __init__.py  
 │   ├── database.db  
 │   ├── feature_importance.py  
