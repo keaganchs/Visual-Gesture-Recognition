@@ -186,7 +186,7 @@ if __name__ == "__main__":
     tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=20)
 
     # Calculate best model using hyper parameter optimization
-    # tnn.calculate_best_model(num_epochs=25, savefig=False)
+    tnn.calculate_best_model(num_epochs=25, savefig=False)
 
     # Fit the model using a larger number of epochs.
     tnn.load_model("keras/best_model.h5")
