@@ -316,6 +316,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.97, min_num_frames_before_detecting_again=15, print_output=True)
+    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.96, min_num_frames_before_detecting_again=15, print_output=True)
     gr.start()
 
