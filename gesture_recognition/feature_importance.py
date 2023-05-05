@@ -188,7 +188,7 @@ class FeatureImportance:
             # Add axis labels and a legend.
             ax.set_title("Feature Importance by Frame", size=16)
             ax.set_xlabel("Frame", size=12)
-            ax.set_ylabel("Importance", size=12)
+            ax.set_ylabel("Mean Decrease in Impurity", size=12)
             ax.legend()
 
             # Save plot.
