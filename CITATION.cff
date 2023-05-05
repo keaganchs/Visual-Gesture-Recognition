@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 authors:
 - family-names: "Holmes"
   given-names: "Keagan"
-title: "Real-time Visual Gesture Recognition for Applications in Smartwatches"
+title: "Real-time Visual Gesture Recognition and Applications in Smartwatches"
 version: 1.0.0
 date-released: 2023-05-16
 url: "https://github.com/keaganchs/Thesis"
