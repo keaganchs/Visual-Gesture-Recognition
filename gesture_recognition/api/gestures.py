@@ -8,8 +8,7 @@ import numpy.typing as npt
 
 from database.db import GESTURE_LIST, VIDEO_LENGTH
 
-import json
-from json import JSONEncoder, JSONDecoder
+from json import JSONEncoder
 from collections import deque
 
 import tensorflow as tf
@@ -50,6 +49,7 @@ class HandHistoryEncoder(JSONEncoder):
         #           }
         #       ]
         #   }
+        ####################################################################
 
         list_obj = []
         if isinstance(obj, deque):

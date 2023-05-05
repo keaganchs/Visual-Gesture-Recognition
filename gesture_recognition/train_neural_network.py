@@ -158,9 +158,9 @@ class TrainNeuralNetwork:
         self.save_model_path = new_save_model_path
 
 
-    def load_model(self) -> None:
+    def load_model(self, model_path: str = "keras/best_model.h5") -> None:
         try:
-            self.model = keras.models.load_model(self.save_model_path)
+            self.model = keras.models.load_model(model_path)
         except:
             raise RuntimeError("Error loading model. Check model_path is valid, or run TrainNeuralNetwork.calculate_best_model() if none exists.")
 
@@ -183,11 +183,11 @@ class TrainNeuralNetwork:
 
 
 if __name__ == "__main__":
-    tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=20)
+    tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=100)
 
     # Calculate best model using hyper parameter optimization
-    tnn.calculate_best_model(num_epochs=20, savefig=True)
+    tnn.calculate_best_model(num_epochs=50, savefig=False)
 
     # Fit the model using a larger number of epochs.
-    # tnn.load_model(model_path="keras/best_model.h5")
-    # tnn.fit_model_to_db_gestures(num_epochs=50, savefig=True)
+    tnn.load_model("keras/best_model.h5")
+    tnn.fit_model_to_db_gestures(num_epochs=50, savefig=True)

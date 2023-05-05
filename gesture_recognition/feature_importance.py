@@ -141,9 +141,61 @@ class FeatureImportance:
             # Save plot.
             filename = "plots_and_data/rfc_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png"
             plt.savefig(filename)
+            plt.close()
+
+            # Format data for a scatterplot, based on axis.
+            X_x = []
+            X_y = []
+
+            Y_x = []
+            Y_y = []
+
+            Z_x = []
+            Z_y = []
+            
+            for idx, feature_name in enumerate(self.feature_names):
+                # Extract frame number from feature name.
+                frame_num_start = feature_name.index("Frame") + len("Frame")
+                frame_num_end = frame_num_start + 1
+
+                # Check if the frame number is one or two digits.
+                if feature_name[frame_num_end].isdigit():
+                    frame_num_end += 1
+
+                frame = int(feature_name[frame_num_start:frame_num_end])
+                axis = feature_name[-1]
+
+                # Append datapoint to appropriate list.
+                if axis == "x":
+                    X_x.append(frame)
+                    X_y.append(importances[idx])
+                elif axis == "y":
+                    Y_x.append(frame)
+                    Y_y.append(importances[idx])
+                else:
+                    Z_x.append(frame)
+                    Z_y.append(importances[idx])
+
+            fig, ax = plt.subplots()
+            ax.set_xlim([0, 29])
+            ax.set_ylim([0, 0.02])
+
+            # Add scatterplot data.
+            ax.scatter(x=X_x, y=X_y, color="b", label="X")
+            ax.scatter(x=Y_x, y=Y_y, color="g", label="Y")
+            ax.scatter(x=Z_x, y=Z_y, color="r", label="Z")
+
+            # Add axis labels and a legend.
+            ax.set_xlabel("Frame")
+            ax.set_ylabel("Importance")
+            ax.legend()
+
+            # Save plot.
+            plt.tight_layout()
+            plt.savefig("plots_and_data/scatterplot.png")
         else:
             # If not saving a plot, print top values.
-            print("Top feature names:\n", top_feature_names)
+            print("Top fea_ture names:\n", top_feature_names)
             print("Top importances:\n", top_importances)
             print("Top standard deviations:\n", top_std_devs)
     
@@ -168,7 +220,7 @@ class FeatureImportance:
 
             # Plot most important features.
             plt.bar(range(max_features), top_scores)
-            plt.title(f"Feature Importance from ANOVA F-value).")
+            plt.title(f"Feature Importance from ANOVA F-value")
             plt.ylabel("Score")
             plt.xticks(range(max_features), x_labels, rotation=45, ha="right")
             plt.tight_layout()
@@ -185,5 +237,5 @@ class FeatureImportance:
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.calculate_rfc_importance(n_estimators=1000, max_features=20, savefig=True)
+    fi.calculate_rfc_importance(n_estimators=10000, max_features=20, savefig=True)
     # fi.calculate_kbest_importance(max_features=20, savefig=True)

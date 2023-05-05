@@ -20,7 +20,7 @@ keras = tf.keras
 
 
 class GestureRecognition:  
-    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold: float = 0.95, print_output: bool = False):   
+    def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold: float = 0.96, min_num_frames_before_detecting_again: int = -1, print_output: bool = False):   
         # Will store the video source, for an integrated camera this is cv2.VideoCapture(0) .  
         self.cap = None
         # Will store the current frame.
@@ -52,14 +52,16 @@ class GestureRecognition:
         self.threshold = detection_threshold
 
         # Bool to stop multiple gestures from being detected at once.
-        self.is_gesture_detected = False
+        self.is_waiting_to_detect = False
 
         # Store a detected gesture and the confidence in that prediction.
         self.prediction = None
         self.prediction_confidence = None
         
         # Count frames since the gesture was detected. 
-        self.detected_gesture_frame_idx = None
+        self.detected_gesture_frame_idx = 0
+        # Do not detect another gesture for __ frames after a gesture has been detected.
+        self.min_num_frames_before_detecting_again = min_num_frames_before_detecting_again
         
 
     def __del__(self):
@@ -118,7 +120,8 @@ class GestureRecognition:
          
     
     def __draw_detected_gesture(self) -> None:
-        if self.prediction is not None:
+        # Show the detected gesture.
+        if (self.prediction is not None) and (self.prediction_confidence is not None):
             cv2.putText(
                 img=self.frame, 
                 text=f"Output of model: {self.prediction} with {self.prediction_confidence:0.2F}% confidence.", 
@@ -131,10 +134,10 @@ class GestureRecognition:
 
 
     def __handle_key_press(self, key_press: int) -> None:
-        # Do nothing on no key press
+        # Do nothing on no key press.
         if key_press == -1:
             pass
-        # Exit on 'Esc'
+        # Exit on "Esc".
         elif key_press == 27:
             self.stop()
         # For any other key press:
@@ -152,34 +155,53 @@ class GestureRecognition:
         dict_hand_positions = json.loads(json_hand_positions)
         # Convert to array.
         array_hand_positions = convert_video_to_array(dict_hand_positions)
-        # Convert to Tensor and return.
-        # tensor = tf.convert_to_tensor(array_hand_positions, dtype=tf.float32)
+        # Expand dimensions so the array can be processed as a Tensor.
         array_hand_positions = tf.expand_dims(array_hand_positions, axis=0)
+        
         return array_hand_positions
 
 
     def __check_for_gesture(self) -> None:
         if self.model is not None:
-            input = self.__preprocess_last_recorded_frames()
-            output = self.model(input).numpy()[0]
+            if not self.is_waiting_to_detect:
+                # Format the last recorded frames (input).
+                input = self.__preprocess_last_recorded_frames()
+                # Run the last recorded frames through the model.
+                output = self.model(input).numpy()[0]
 
-            # If printing is enabled, print the raw value of each output node.
-            if self.is_printing_output:
-                print(["{0:0.4f}".format(weight) for weight in output])
+                # If printing is enabled, print the raw value of each output node.
+                if self.is_printing_output:
+                    print(["{0:0.4f}".format(weight) for weight in output])
 
-            # The values in the output nodes are confidences of each gesture being the input.
-            # The prediction is the highest confidence. 
-            prediction_idx = np.argmax(output)
-            confidence = output[prediction_idx]
-            
-            # Return the name of the gesture if the confidence is above the threshold.
-            if confidence > self.threshold:
-                self.prediction = self.gesture_list[prediction_idx]
-                self.prediction_confidence = confidence
-            else:
-                self.prediction = None
-                self.prediction_confidence = None
-        
+                # The values in the output nodes are confidences of each gesture being the input.
+                # The prediction is the highest confidence. 
+                prediction_idx = np.argmax(output)
+                confidence = output[prediction_idx]
+                
+                # Return the name of the gesture if the confidence is above the threshold.
+                if confidence > self.threshold:
+                    self.prediction = self.gesture_list[prediction_idx]
+                    self.prediction_confidence = confidence
+                    self.is_waiting_to_detect = True
+                    self.detected_gesture_frame_idx = 0
+
+                    # Print output of model upon detection.
+                    if self.is_printing_output:
+                        print(f"Output of model: {self.prediction} with {self.prediction_confidence:0.4F}% confidence.")
+                else:
+                    self.prediction = None
+                    self.prediction_confidence = None
+
+            # Check if a gesture should be searched for on the next cycle.        
+            if self.detected_gesture_frame_idx > self.min_num_frames_before_detecting_again:
+                # If a gesture was detected a number of frames over the limit, reset the counters. 
+                self.is_waiting_to_detect = False
+                self.detected_gesture_frame_idx = 0
+            else:    
+                # If a gesture is currently detected for a number of frames under the frame limit, incriment the index.
+                self.detected_gesture_frame_idx += 1
+
+
 
     def load_model(self, model_path: str) -> None:
         # Load model from given path.
@@ -244,17 +266,12 @@ class GestureRecognition:
 
                 if self.is_trying_to_detect:
                     # Only detect one gesture at a time.
-                    if not self.is_gesture_detected:
-                        self.__check_for_gesture()
-                        if self.prediction:
-                            self.__draw_detected_gesture()
-                            if self.is_printing_output:
-                                print(f"Output of model: {self.prediction} with {self.prediction_confidence:0.4F}% confidence.")
+                    self.__check_for_gesture()
+                    self.__draw_detected_gesture()
                 else:
                     # Clear predicitons when stopping detection.
                     self.prediction = None
                     self.prediction_confidence = None
-
 
                 # Get keyboard input.
                 key_press = cv2.waitKey(10)
@@ -273,6 +290,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.80, print_output=True)
+    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.95, min_num_frames_before_detecting_again=15, print_output=True)
     gr.start()
 
