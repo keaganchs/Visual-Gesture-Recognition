@@ -186,13 +186,14 @@ class FeatureImportance:
             ax.scatter(x=Z_x, y=Z_y, color="r", label="Z")
 
             # Add axis labels and a legend.
-            ax.set_xlabel("Frame")
-            ax.set_ylabel("Importance")
+            ax.set_title("Feature Importance by Frame", size=16)
+            ax.set_xlabel("Frame", size=12)
+            ax.set_ylabel("Importance", size=12)
             ax.legend()
 
             # Save plot.
             plt.tight_layout()
-            plt.savefig("plots_and_data/scatterplot.png")
+            plt.savefig("plots_and_data/scatterplot_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".png")
         else:
             # If not saving a plot, print top values.
             print("Top fea_ture names:\n", top_feature_names)
@@ -237,5 +238,5 @@ class FeatureImportance:
 
 if __name__ == "__main__":
     fi = FeatureImportance()
-    fi.calculate_rfc_importance(n_estimators=10000, max_features=20, savefig=True)
+    fi.calculate_rfc_importance(n_estimators=1000, max_features=20, savefig=True)
     # fi.calculate_kbest_importance(max_features=20, savefig=True)

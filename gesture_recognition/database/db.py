@@ -17,7 +17,7 @@ VIDEO_LENGTH = 30
 
 # Gestures which appear in the `gesture_annotation.py`. 
 # This list should also be passed as an argument to `gesture_recognition.py` and `feature_importance.py`. 
-GESTURE_LIST = ["SWIPE_LEFT", "SWIPE_RIGHT", "CW_CIRCLE", "CCW_CIRCLE"]
+GESTURE_LIST = ["SWIPE_LEFT", "SWIPE_RIGHT", "CW_CIRCLE", "CCW_CIRCLE", "SWIPE_UP", "SWIPE_DOWN", "POINTING"]
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 
 

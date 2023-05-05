@@ -118,7 +118,30 @@ class GestureRecognition:
                 lineType=cv2.LINE_AA, 
                 bottomLeftOrigin=False)
          
-    
+
+    def __draw_index_fingertip_landmarks_history(self) -> None:
+        assert self.frame.flags.writeable
+        
+        points = []
+        image_rows, image_cols, _ = self.frame.shape
+
+        # Get index finger coordinates.
+        for result in self.last_hand_positions:
+            if result and result.multi_hand_landmarks:
+                for hand_landmarks in result.multi_hand_landmarks:
+                    points.append((
+                        # Pixel conversion from mediapipe.solutions.drawing_utils._normalized_to_pixel_coordinates():
+                        int(min(np.floor(hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x * image_cols), image_cols - 1)),
+                        int(min(np.floor(hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_rows), image_rows - 1))
+                    ))
+            else:
+                points.append(None)
+
+        for i in range(1, len(points)):
+            if points[i] and points[i-1]:
+                cv2.line(self.frame, points[i], points[i-1], (0, 0, 255), 3)
+
+
     def __draw_detected_gesture(self) -> None:
         # Show the detected gesture.
         if (self.prediction is not None) and (self.prediction_confidence is not None):
@@ -131,6 +154,9 @@ class GestureRecognition:
                 thickness=1, 
                 lineType=cv2.LINE_AA, 
                 bottomLeftOrigin=False)
+            
+            if self.prediction == "POINTING":
+                self.__draw_index_fingertip_landmarks_history()
 
 
     def __handle_key_press(self, key_press: int) -> None:
@@ -186,8 +212,8 @@ class GestureRecognition:
                     self.detected_gesture_frame_idx = 0
 
                     # Print output of model upon detection.
-                    if self.is_printing_output:
-                        print(f"Output of model: {self.prediction} with {self.prediction_confidence:0.4F}% confidence.")
+                    # if self.is_printing_output:
+                        # print(f"Output of model: {self.prediction} with {self.prediction_confidence:0.4F}% confidence.")
                 else:
                     self.prediction = None
                     self.prediction_confidence = None
@@ -290,6 +316,6 @@ class GestureRecognition:
 
 
 if __name__ == "__main__":
-    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.95, min_num_frames_before_detecting_again=15, print_output=True)
+    gr = GestureRecognition(model_path="keras/best_model.h5", gesture_list=GESTURE_LIST, video_length=VIDEO_LENGTH, detection_threshold=0.97, min_num_frames_before_detecting_again=15, print_output=True)
     gr.start()
 

@@ -98,7 +98,7 @@ class TrainNeuralNetwork:
         return model
 
 
-    def __plot_history(self, history: AnyStr, num_epochs: int) -> None:
+    def __plot_history(self, history: AnyStr, num_epochs: int, filename: str = "model_info") -> None:
         plt.plot(
             np.arange(1, num_epochs+1), 
             history.history["loss"], label="Loss"
@@ -118,7 +118,7 @@ class TrainNeuralNetwork:
         plt.title("Evaluation Metrics", size=16)
         plt.xlabel("Epoch", size=12)
         plt.legend()
-        plt.savefig("plots_and_data/model_info.png")
+        plt.savefig(f"plots_and_data/{filename}.png")
 
 
     def calculate_best_model(self, num_epochs: int = 10, savefig: bool = False) -> None:
@@ -177,17 +177,17 @@ class TrainNeuralNetwork:
         
         # Plot info about model if savefig == True.
         if savefig:
-            self.__plot_history(history=history, num_epochs=num_epochs)
+            self.__plot_history(history=history, num_epochs=num_epochs, filename="fitted_model_info")
 
         self.model.summary()
 
 
 if __name__ == "__main__":
-    tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=100)
+    tnn = TrainNeuralNetwork(save_model_path="keras/best_model.h5", hyperopt_max_trials=20)
 
     # Calculate best model using hyper parameter optimization
-    tnn.calculate_best_model(num_epochs=50, savefig=False)
+    # tnn.calculate_best_model(num_epochs=25, savefig=False)
 
     # Fit the model using a larger number of epochs.
     tnn.load_model("keras/best_model.h5")
-    tnn.fit_model_to_db_gestures(num_epochs=50, savefig=True)
+    tnn.fit_model_to_db_gestures(num_epochs=25, savefig=True)
