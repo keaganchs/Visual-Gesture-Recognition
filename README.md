@@ -46,7 +46,7 @@ The files are organized such that all files that can be run are in the `./gestur
 
 For the most part, you will only be interested in three files: `gesture_annotation.py`, `train_neural_network.py`, and `gesture_recognition.py`.  
 
-## Adding a New Gesture
+## Creating Your Own Gestures
 
 1. Edit the list `GESTURE_LIST` in `./gesture_recognition/database/db.py`.  
 This will automatically allow you to add new training data to the database with this annotation via `gesture_annotation.py`.  
