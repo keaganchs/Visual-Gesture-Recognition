@@ -18,6 +18,23 @@ import tensorflow as tf
 # Use this import method for VS Code IntelliSense.
 keras = tf.keras
 
+"""
+To get the average execution time of a function, uncomment the following:
+import time
+execution_times = []
+
+Wrap the function in these two statements:
+
+start_time = time.time()
+# function to time goes here
+execution_times.append(time.time() - start_time)
+
+Place this in GestureRecognition.stop():
+
+if len(execution_times) > 0:
+    print("Average execution time: ", sum(execution_times)/len(execution_times))
+
+"""
 
 class GestureRecognition:  
     def __init__(self, model_path: str, gesture_list: List, video_length: int, detection_threshold: float = 0.96, min_num_frames_before_detecting_again: int = -1, print_output: bool = False):   
@@ -291,7 +308,7 @@ class GestureRecognition:
                 self.__draw_toggle_detection()
 
                 if self.is_trying_to_detect:
-                    # Only detect one gesture at a time.
+                    # Run coordinate history through the neural network.
                     self.__check_for_gesture()
                     self.__draw_detected_gesture()
                 else:
