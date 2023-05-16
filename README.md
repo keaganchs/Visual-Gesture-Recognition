@@ -1,6 +1,8 @@
 # Real-time Visual Gesture Recognition
 Code for my bachelor thesis at Jacobs (Constructor) University Bremen. This is software uses [Mediapipe Hands](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker) for hand tracking and the [TensorFlow Keras](https://keras.io/api/) neural network to predict a gesture based on hand location data.
 
+The code is set up to only detect one hand as the focus of this project was for applications in smartwatches.
+
 ## Quick Start
 
 1. Clone this repo and move into the new directory.  
@@ -46,7 +48,7 @@ The files are organized such that all files that can be run are in the `./gestur
 
 For the most part, you will only be interested in three files: `gesture_annotation.py`, `train_neural_network.py`, and `gesture_recognition.py`.  
 
-## Adding a New Gesture
+## Creating Your Own Gestures
 
 1. Edit the list `GESTURE_LIST` in `./gesture_recognition/database/db.py`.  
 This will automatically allow you to add new training data to the database with this annotation via `gesture_annotation.py`.  
@@ -60,3 +62,13 @@ then run hyperparameter optimization to determine an ideal model. This optimal m
 
 4. Now that everything is set up, just run `gesture_recognition.py`, and press the spacebar to start recognizing gestures. You should see your 
 new entry on the screen with the other available gestures.
+
+## Collecting Gesture Data
+
+20 gestures per classification is the minimum recommended number, but more gestures will certainly improve accuracy. Around 80 total gestures (40 per hand) was perfectly satisfactory during testing.  
+
+When collecting training data ensure to use both hands (one at a time), perform the gesture in multiple places in the camera's view, and perform the gesture both near and far from the camera.  
+
+You can get the number of gestures with a given classification with the following SQL query:  
+`SELECT classification, count(*) FROM Gesture GROUP BY classification`
+
