@@ -169,6 +169,20 @@ class TrainNeuralNetwork:
         if self.model is None:
             raise RuntimeWarning("Load a model first!")
 
+        # Reset model
+        # self.model = tf.keras.Sequential().from_config(self.model.get_config())
+        # Compile model.
+        # self.model.compile(
+        #     optimizer="adam",
+        #     # optimizer="rmsprop",
+        #     loss="categorical_crossentropy",
+        #     metrics=[
+        #         keras.metrics.BinaryAccuracy(name="accuracy"),
+        #         keras.metrics.Precision(name="precision"),
+        #         keras.metrics.Recall(name="recall")
+        #     ]
+        # )
+
         gesture_data, classification_data = self.__get_training_data_from_db()
         X = tf.convert_to_tensor(gesture_data, dtype=tf.float32)
         # y = classification_data
